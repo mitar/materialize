@@ -127,7 +127,8 @@
         easing: 'easeOutCubic',
         complete: function() {
           $(this).css('height', '');
-        }
+          origin.trigger("dropdown:open", this);
+        },
       })
         .animate( {opacity: 1}, {queue: false, duration: options.inDuration, easing: 'easeOutSine'});
     }
@@ -135,7 +136,12 @@
     function hideDropdown() {
       // Check for simultaneous focus and click events.
       isFocused = false;
-      activates.fadeOut(options.outDuration);
+      activates.fadeOut({
+        duration:options.outDuration,
+        complete: function() {
+          origin.trigger("dropdown:close", this);
+        },
+      });
       activates.removeClass('active');
       origin.removeClass('active');
     }
