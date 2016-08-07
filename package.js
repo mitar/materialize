@@ -11,7 +11,7 @@ Package.describe({
 Package.onUse(function (api) {
   api.versionsFrom('METEOR@1.0');
 
-  api.use('fourseven:scss@3.2.0');
+  api.use('fourseven:scss@3.8.0_1');
   api.use('jquery', 'client');
   api.imply('jquery', 'client');
 
@@ -81,7 +81,7 @@ Package.onUse(function (api) {
     'sass/materialize.scss'
   ];
 
-  api.addFiles(scssFiles, 'client');
+  api.addFiles(scssFiles, 'client', {isImport: true});
 
 
   api.export('Materialize', 'client');
