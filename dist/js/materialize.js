@@ -1,5 +1,5 @@
 /*!
- * Materialize v0.97.7 (http://materializecss.com)
+ * Materialize vundefined (http://materializecss.com)
  * Copyright 2014-2015 Materialize
  * MIT License (https://raw.githubusercontent.com/Dogfalo/materialize/master/LICENSE)
  */
@@ -313,7 +313,9 @@ if ($) {
 ;(function ($) {
   $.fn.collapsible = function(options) {
     var defaults = {
-        accordion: undefined
+      accordion: undefined,
+      onOpen: undefined,
+      onClose: undefined
     };
 
     options = $.extend(defaults, options);
@@ -328,22 +330,22 @@ if ($) {
       var collapsible_type = $this.data("collapsible");
 
       // Turn off any existing event handlers
-       $this.off('click.collapse', '> li > .collapsible-header');
-       $panel_headers.off('click.collapse');
+      $this.off('click.collapse', '> li > .collapsible-header');
+      $panel_headers.off('click.collapse');
 
 
-       /****************
-       Helper Functions
-       ****************/
+      /****************
+      Helper Functions
+      ****************/
 
       // Accordion Open
       function accordionOpen(object) {
         $panel_headers = $this.find('> li > .collapsible-header');
         if (object.hasClass('active')) {
-            object.parent().addClass('active');
+          object.parent().addClass('active');
         }
         else {
-            object.parent().removeClass('active');
+          object.parent().removeClass('active');
         }
         if (object.parent().hasClass('active')){
           object.siblings('.collapsible-body').stop(true,false).slideDown({ duration: 350, easing: "easeOutQuart", queue: false, complete: function() {$(this).css('height', '');}});
@@ -353,31 +355,61 @@ if ($) {
         }
 
         $panel_headers.not(object).removeClass('active').parent().removeClass('active');
-        $panel_headers.not(object).parent().children('.collapsible-body').stop(true,false).slideUp(
-          {
-            duration: 350,
-            easing: "easeOutQuart",
-            queue: false,
-            complete:
-              function() {
-                $(this).css('height', '');
-              }
-          });
+
+        // Close previously open accordion elements.
+        $panel_headers.not(object).parent().children('.collapsible-body').stop(true,false).each(function() {
+          if ($(this).is(':visible')) {
+            $(this).slideUp({
+              duration: 350,
+              easing: "easeOutQuart",
+              queue: false,
+              complete:
+                function() {
+                  $(this).css('height', '');
+                  execCallbacks($(this).siblings('.collapsible-header'));
+                }
+            });
+          }
+        });
       }
 
       // Expandable Open
       function expandableOpen(object) {
         if (object.hasClass('active')) {
-            object.parent().addClass('active');
+          object.parent().addClass('active');
         }
         else {
-            object.parent().removeClass('active');
+          object.parent().removeClass('active');
         }
         if (object.parent().hasClass('active')){
           object.siblings('.collapsible-body').stop(true,false).slideDown({ duration: 350, easing: "easeOutQuart", queue: false, complete: function() {$(this).css('height', '');}});
         }
-        else{
+        else {
           object.siblings('.collapsible-body').stop(true,false).slideUp({ duration: 350, easing: "easeOutQuart", queue: false, complete: function() {$(this).css('height', '');}});
+        }
+      }
+
+      // Open collapsible. object: .collapsible-header
+      function collapsibleOpen(object) {
+        if (options.accordion || collapsible_type === "accordion" || collapsible_type === undefined) { // Handle Accordion
+          accordionOpen(object);
+        } else { // Handle Expandables
+          expandableOpen(object);
+        }
+
+        execCallbacks(object);
+      }
+
+      // Handle callbacks
+      function execCallbacks(object) {
+        if (object.hasClass('active')) {
+          if (typeof(options.onOpen) === "function") {
+            options.onOpen.call(this, object.parent());
+          }
+        } else {
+          if (typeof(options.onClose) === "function") {
+            options.onClose.call(this, object.parent());
+          }
         }
       }
 
@@ -409,8 +441,7 @@ if ($) {
 
       // Add click handler to only direct collapsible header children
       $this.on('click.collapse', '> li > .collapsible-header', function(e) {
-        var $header = $(this),
-            element = $(e.target);
+        var element = $(e.target);
 
         if (isChildrenOfPanelHeader(element)) {
           element = getPanelHeader(element);
@@ -418,25 +449,17 @@ if ($) {
 
         element.toggleClass('active');
 
-        if (options.accordion || collapsible_type === "accordion" || collapsible_type === undefined) { // Handle Accordion
-          accordionOpen(element);
-        } else { // Handle Expandables
-          expandableOpen(element);
-
-          if ($header.hasClass('active')) {
-            expandableOpen($header);
-          }
-        }
+        collapsibleOpen(element);
       });
 
+
       // Open first active
-      var $panel_headers = $this.find('> li > .collapsible-header');
       if (options.accordion || collapsible_type === "accordion" || collapsible_type === undefined) { // Handle Accordion
-        accordionOpen($panel_headers.filter('.active').first());
-      }
-      else { // Handle Expandables
+        collapsibleOpen($panel_headers.filter('.active').first());
+
+      } else { // Handle Expandables
         $panel_headers.filter('.active').each(function() {
-          expandableOpen($(this));
+          collapsibleOpen($(this));
         });
       }
 
@@ -485,7 +508,7 @@ if ($) {
 
     this.each(function(){
       var origin = $(this);
-      var options = $.extend({}, defaults, options);
+      var curr_options = $.extend({}, defaults, options);
       var isFocused = false;
 
       // Dropdown menu
@@ -493,21 +516,21 @@ if ($) {
 
       function updateOptions() {
         if (origin.data('induration') !== undefined)
-          options.inDuration = origin.data('induration');
+          curr_options.inDuration = origin.data('induration');
         if (origin.data('outduration') !== undefined)
-          options.outDuration = origin.data('outduration');
+          curr_options.outDuration = origin.data('outduration');
         if (origin.data('constrainwidth') !== undefined)
-          options.constrain_width = origin.data('constrainwidth');
+          curr_options.constrain_width = origin.data('constrainwidth');
         if (origin.data('hover') !== undefined)
-          options.hover = origin.data('hover');
+          curr_options.hover = origin.data('hover');
         if (origin.data('gutter') !== undefined)
-          options.gutter = origin.data('gutter');
+          curr_options.gutter = origin.data('gutter');
         if (origin.data('beloworigin') !== undefined)
-          options.belowOrigin = origin.data('beloworigin');
+          curr_options.belowOrigin = origin.data('beloworigin');
         if (origin.data('alignment') !== undefined)
-          options.alignment = origin.data('alignment');
+          curr_options.alignment = origin.data('alignment');
         if (origin.data('stoppropagation') !== undefined)
-          options.stopPropagation = origin.data('stoppropagation');
+          curr_options.stopPropagation = origin.data('stoppropagation');
       }
 
       updateOptions();
@@ -533,7 +556,7 @@ if ($) {
         origin.addClass('active');
 
         // Constrain width
-        if (options.constrain_width === true) {
+        if (curr_options.constrain_width === true) {
           activates.css('width', origin.outerWidth());
 
         } else {
@@ -545,13 +568,13 @@ if ($) {
         var originHeight = origin.innerHeight();
         var offsetLeft = origin.offset().left;
         var offsetTop = origin.offset().top - $(window).scrollTop();
-        var currAlignment = options.alignment;
+        var currAlignment = curr_options.alignment;
         var gutterSpacing = 0;
         var leftPosition = 0;
 
         // Below Origin
         var verticalOffset = 0;
-        if (options.belowOrigin === true) {
+        if (curr_options.belowOrigin === true) {
           verticalOffset = originHeight;
         }
 
@@ -594,12 +617,12 @@ if ($) {
 
         // Handle edge alignment
         if (currAlignment === 'left') {
-          gutterSpacing = options.gutter;
+          gutterSpacing = curr_options.gutter;
           leftPosition = origin.position().left + gutterSpacing;
         }
         else if (currAlignment === 'right') {
           var offsetRight = origin.position().left + origin.outerWidth() - activates.outerWidth();
-          gutterSpacing = -options.gutter;
+          gutterSpacing = -curr_options.gutter;
           leftPosition =  offsetRight + gutterSpacing;
         }
 
@@ -615,26 +638,26 @@ if ($) {
         activates.stop(true, true).css('opacity', 0)
           .slideDown({
             queue: false,
-            duration: options.inDuration,
+            duration: curr_options.inDuration,
             easing: 'easeOutCubic',
             complete: function() {
               $(this).css('height', '');
             }
           })
-          .animate( {opacity: 1}, {queue: false, duration: options.inDuration, easing: 'easeOutSine'});
+          .animate( {opacity: 1}, {queue: false, duration: curr_options.inDuration, easing: 'easeOutSine'});
       }
 
       function hideDropdown() {
         // Check for simultaneous focus and click events.
         isFocused = false;
-        activates.fadeOut(options.outDuration);
+        activates.fadeOut(curr_options.outDuration);
         activates.removeClass('active');
         origin.removeClass('active');
-        setTimeout(function() { activates.css('max-height', ''); }, options.outDuration);
+        setTimeout(function() { activates.css('max-height', ''); }, curr_options.outDuration);
       }
 
       // Hover
-      if (options.hover) {
+      if (curr_options.hover) {
         var open = false;
         origin.unbind('click.' + origin.attr('id'));
         // Hover handler to show dropdown
@@ -673,7 +696,7 @@ if ($) {
                  !origin.hasClass('active') &&
                  ($(e.target).closest('.dropdown-content').length === 0)) {
               e.preventDefault(); // Prevents button click from moving window
-              if (options.stopPropagation) {
+              if (curr_options.stopPropagation) {
                 e.stopPropagation();
               }
               placeDropdown('click');
@@ -1245,11 +1268,22 @@ $(document).ready(function(){
       var $this = $(this),
           window_width = $(window).width();
 
-      $this.width('100%');
       var $active, $content, $links = $this.find('li.tab a'),
           $tabs_width = $this.width(),
           $tab_width = Math.max($tabs_width, $this[0].scrollWidth) / $links.length,
           $index = 0;
+
+      // Finds right attribute for indicator based on active tab.
+      // el: jQuery Object
+      var calcRightPos = function(el) {
+        return $tabs_width - el.position().left - el.outerWidth() - $this.scrollLeft();
+      };
+
+      // Finds left attribute for indicator based on active tab.
+      // el: jQuery Object
+      var calcLeftPos = function(el) {
+        return el.position().left + $this.scrollLeft();
+      };
 
       // If the location.hash matches one of the links, use that as the active tab.
       $active = $($links.filter('[href="'+location.hash+'"]'));
@@ -1276,8 +1310,12 @@ $(document).ready(function(){
       $this.append('<div class="indicator"></div>');
       var $indicator = $this.find('.indicator');
       if ($this.is(":visible")) {
-        $indicator.css({"right": $tabs_width - (($index + 1) * $tab_width)});
-        $indicator.css({"left": $index * $tab_width});
+        // $indicator.css({"right": $tabs_width - (($index + 1) * $tab_width)});
+        // $indicator.css({"left": $index * $tab_width});
+        setTimeout(function() {
+          $indicator.css({"right": calcRightPos($active) });
+          $indicator.css({"left": calcLeftPos($active) });
+        }, 0);
       }
       $(window).resize(function () {
         $tabs_width = $this.width();
@@ -1286,8 +1324,8 @@ $(document).ready(function(){
           $index = 0;
         }
         if ($tab_width !== 0 && $tabs_width !== 0) {
-          $indicator.css({"right": $tabs_width - (($index + 1) * $tab_width)});
-          $indicator.css({"left": $index * $tab_width});
+          $indicator.css({"right": calcRightPos($active) });
+          $indicator.css({"left": calcLeftPos($active) });
         }
       });
 
@@ -1322,6 +1360,7 @@ $(document).ready(function(){
         $active = $(this);
         $content = $(this.hash);
         $links = $this.find('li.tab a');
+        var activeRect = $active.position();
 
         // Make the tab active.
         $active.addClass('active');
@@ -1341,14 +1380,14 @@ $(document).ready(function(){
         }
 
         // Update indicator
-        if (($index - $prev_index) >= 0) {
-          $indicator.velocity({"right": $tabs_width - (($index + 1) * $tab_width)}, { duration: 300, queue: false, easing: 'easeOutQuad'});
-          $indicator.velocity({"left": $index * $tab_width}, {duration: 300, queue: false, easing: 'easeOutQuad', delay: 90});
 
-        }
-        else {
-          $indicator.velocity({"left": $index * $tab_width}, { duration: 300, queue: false, easing: 'easeOutQuad'});
-          $indicator.velocity({"right": $tabs_width - (($index + 1) * $tab_width)}, {duration: 300, queue: false, easing: 'easeOutQuad', delay: 90});
+        if (($index - $prev_index) >= 0) {
+          $indicator.velocity({"right": calcRightPos($active) }, { duration: 300, queue: false, easing: 'easeOutQuad'});
+          $indicator.velocity({"left": calcLeftPos($active) }, {duration: 300, queue: false, easing: 'easeOutQuad', delay: 90});
+
+        } else {
+          $indicator.velocity({"left": calcLeftPos($active) }, { duration: 300, queue: false, easing: 'easeOutQuad'});
+          $indicator.velocity({"right": calcRightPos($active) }, {duration: 300, queue: false, easing: 'easeOutQuad', delay: 90});
         }
 
         // Prevent the anchor's default click action
@@ -2102,17 +2141,17 @@ $(document).ready(function(){
         }
 
         // Add Touch Area
-        var dragTarget = $('<div class="drag-target"></div>');
-        $('body').append(dragTarget);
+        var $dragTarget = $('<div class="drag-target"></div>').attr('data-sidenav', $this.attr('data-activates'));
+        $('body').append($dragTarget);
 
         if (options.edge == 'left') {
           menu_id.css('transform', 'translateX(-100%)');
-          dragTarget.css({'left': 0}); // Add Touch Area
+          $dragTarget.css({'left': 0}); // Add Touch Area
         }
         else {
           menu_id.addClass('right-aligned') // Change text-alignment to right
             .css('transform', 'translateX(100%)');
-          dragTarget.css({'right': 0}); // Add Touch Area
+          $dragTarget.css({'right': 0}); // Add Touch Area
         }
 
         // If fixed sidenav, bring menu out
@@ -2155,7 +2194,7 @@ $(document).ready(function(){
           });
         }
 
-        function removeMenu(restoreNav) {
+        var removeMenu = function(restoreNav) {
           panning = false;
           menuOut = false;
           // Reenable scrolling
@@ -2171,7 +2210,7 @@ $(document).ready(function(){
             } });
           if (options.edge === 'left') {
             // Reset phantom div
-            dragTarget.css({width: '', right: '', left: '0'});
+            $dragTarget.css({width: '', right: '', left: '0'});
             menu_id.velocity(
               {'translateX': '-100%'},
               { duration: 200,
@@ -2189,7 +2228,7 @@ $(document).ready(function(){
           }
           else {
             // Reset phantom div
-            dragTarget.css({width: '', right: '0', left: ''});
+            $dragTarget.css({width: '', right: '0', left: ''});
             menu_id.velocity(
               {'translateX': '100%'},
               { duration: 200,
@@ -2204,7 +2243,7 @@ $(document).ready(function(){
                 }
               });
           }
-        }
+        };
 
 
 
@@ -2212,13 +2251,13 @@ $(document).ready(function(){
         var panning = false;
         var menuOut = false;
 
-        dragTarget.on('click', function(){
+        $dragTarget.on('click', function(){
           if (menuOut) {
             removeMenu();
           }
         });
 
-        dragTarget.hammer({
+        $dragTarget.hammer({
           prevent_default: false
         }).bind('pan', function(e) {
 
@@ -2231,17 +2270,17 @@ $(document).ready(function(){
 
             // Disable Scrolling
             var $body = $('body');
+            var $overlay = $('<div id="sidenav-overlay"></div>');
             var oldWidth = $body.innerWidth();
             $body.css('overflow', 'hidden');
             $body.width(oldWidth);
 
             // If overlay does not exist, create one and if it is clicked, close menu
-            if ($('#sidenav-overlay').length === 0) {
-              var overlay = $('<div id="sidenav-overlay"></div>');
-              overlay.css('opacity', 0).click( function(){
+            if ($overlay.length === 0) {
+              $overlay.css('opacity', 0).click( function(){
                 removeMenu();
               });
-              $('body').append(overlay);
+              $('body').append($overlay);
             }
 
             // Keep within boundaries
@@ -2279,17 +2318,18 @@ $(document).ready(function(){
             var overlayPerc;
             if (options.edge === 'left') {
               overlayPerc = x / options.menuWidth;
-              $('#sidenav-overlay').velocity({opacity: overlayPerc }, {duration: 10, queue: false, easing: 'easeOutQuad'});
+              $overlay.velocity({opacity: overlayPerc }, {duration: 10, queue: false, easing: 'easeOutQuad'});
             }
             else {
               overlayPerc = Math.abs((x - window.innerWidth) / options.menuWidth);
-              $('#sidenav-overlay').velocity({opacity: overlayPerc }, {duration: 10, queue: false, easing: 'easeOutQuad'});
+              $overlay.velocity({opacity: overlayPerc }, {duration: 10, queue: false, easing: 'easeOutQuad'});
             }
           }
 
         }).bind('panend', function(e) {
 
           if (e.gesture.pointerType == "touch") {
+            var $overlay = $('<div id="sidenav-overlay"></div>');
             var velocityX = e.gesture.velocityX;
             var x = e.gesture.center.x;
             var leftPos = x - options.menuWidth;
@@ -2310,8 +2350,8 @@ $(document).ready(function(){
                   menu_id.velocity({'translateX': [0, leftPos]}, {duration: 300, queue: false, easing: 'easeOutQuad'});
                 }
 
-                $('#sidenav-overlay').velocity({opacity: 1 }, {duration: 50, queue: false, easing: 'easeOutQuad'});
-                dragTarget.css({width: '50%', right: 0, left: ''});
+                $overlay.velocity({opacity: 1 }, {duration: 50, queue: false, easing: 'easeOutQuad'});
+                $dragTarget.css({width: '50%', right: 0, left: ''});
                 menuOut = true;
               }
               else if (!menuOut || velocityX > 0.3) {
@@ -2322,11 +2362,11 @@ $(document).ready(function(){
                 });
                 // Slide menu closed
                 menu_id.velocity({'translateX': [-1 * options.menuWidth - 10, leftPos]}, {duration: 200, queue: false, easing: 'easeOutQuad'});
-                $('#sidenav-overlay').velocity({opacity: 0 }, {duration: 200, queue: false, easing: 'easeOutQuad',
+                $overlay.velocity({opacity: 0 }, {duration: 200, queue: false, easing: 'easeOutQuad',
                   complete: function () {
                     $(this).remove();
                   }});
-                dragTarget.css({width: '10px', right: '', left: 0});
+                $dragTarget.css({width: '10px', right: '', left: 0});
               }
             }
             else {
@@ -2336,8 +2376,8 @@ $(document).ready(function(){
                   menu_id.velocity({'translateX': [0, rightPos]}, {duration: 300, queue: false, easing: 'easeOutQuad'});
                 }
 
-                $('#sidenav-overlay').velocity({opacity: 1 }, {duration: 50, queue: false, easing: 'easeOutQuad'});
-                dragTarget.css({width: '50%', right: '', left: 0});
+                $overlay.velocity({opacity: 1 }, {duration: 50, queue: false, easing: 'easeOutQuad'});
+                $dragTarget.css({width: '50%', right: '', left: 0});
                 menuOut = true;
               }
               else if (!menuOut || velocityX < -0.3) {
@@ -2349,11 +2389,11 @@ $(document).ready(function(){
 
                 // Slide menu closed
                 menu_id.velocity({'translateX': [options.menuWidth + 10, rightPos]}, {duration: 200, queue: false, easing: 'easeOutQuad'});
-                $('#sidenav-overlay').velocity({opacity: 0 }, {duration: 200, queue: false, easing: 'easeOutQuad',
+                $overlay.velocity({opacity: 0 }, {duration: 200, queue: false, easing: 'easeOutQuad',
                   complete: function () {
                     $(this).remove();
                   }});
-                dragTarget.css({width: '10px', right: 0, left: ''});
+                $dragTarget.css({width: '10px', right: 0, left: ''});
               }
             }
 
@@ -2370,36 +2410,36 @@ $(document).ready(function(){
 
               // Disable Scrolling
               var $body = $('body');
+              var $overlay = $('<div id="sidenav-overlay"></div>');
               var oldWidth = $body.innerWidth();
               $body.css('overflow', 'hidden');
               $body.width(oldWidth);
 
               // Push current drag target on top of DOM tree
-              $('body').append(dragTarget);
+              $('body').append($dragTarget);
 
               if (options.edge === 'left') {
-                dragTarget.css({width: '50%', right: 0, left: ''});
+                $dragTarget.css({width: '50%', right: 0, left: ''});
                 menu_id.velocity({'translateX': [0, -1 * options.menuWidth]}, {duration: 300, queue: false, easing: 'easeOutQuad'});
               }
               else {
-                dragTarget.css({width: '50%', right: '', left: 0});
+                $dragTarget.css({width: '50%', right: '', left: 0});
                 menu_id.velocity({'translateX': [0, options.menuWidth]}, {duration: 300, queue: false, easing: 'easeOutQuad'});
               }
 
-              var overlay = $('<div id="sidenav-overlay"></div>');
-              overlay.css('opacity', 0)
+              $overlay.css('opacity', 0)
               .click(function(){
                 menuOut = false;
                 panning = false;
                 removeMenu();
-                overlay.velocity({opacity: 0}, {duration: 300, queue: false, easing: 'easeOutQuad',
+                $overlay.velocity({opacity: 0}, {duration: 300, queue: false, easing: 'easeOutQuad',
                   complete: function() {
                     $(this).remove();
                   } });
 
               });
-              $('body').append(overlay);
-              overlay.velocity({opacity: 1}, {duration: 300, queue: false, easing: 'easeOutQuad',
+              $('body').append($overlay);
+              $overlay.velocity({opacity: 1}, {duration: 300, queue: false, easing: 'easeOutQuad',
                 complete: function () {
                   menuOut = true;
                   panning = false;
@@ -2412,6 +2452,14 @@ $(document).ready(function(){
       });
 
 
+    },
+    destroy: function () {
+      var $overlay = $('#sidenav-overlay');
+      var $dragTarget = $('.drag-target[data-sidenav="' + $(this).attr('data-activates') + '"]');
+      $overlay.trigger('click');
+      $dragTarget.remove();
+      $(this).off('click');
+      $overlay.remove();
     },
     show : function() {
       this.trigger('click');
@@ -3751,11 +3799,11 @@ $(document).ready(function(){
     secondaryPlaceholder: '',
   };
 
-  $(document).ready(function(){
+  $(document).ready(function() {
     // Handle removal of static chips.
     $(document).on('click', '.chip .close', function(e){
       var $chips = $(this).closest('.chips');
-      if ($chips.data('initialized')) {
+      if ($chips.attr('data-initialized')) {
         return;
       }
       $(this).closest('.chip').remove();
@@ -3778,11 +3826,8 @@ $(document).ready(function(){
       return this.$el.data('chips');
     }
 
-    if ('options' === options) {
-      return this.$el.data('options');
-    }
+    var curr_options = $.extend({}, materialChipsDefaults, options);
 
-    this.$el.data('options', $.extend({}, materialChipsDefaults, options));
 
     // Initialize
     this.init = function() {
@@ -3790,23 +3835,24 @@ $(document).ready(function(){
       var chips;
       self.$el.each(function(){
         var $chips = $(this);
-        if ($chips.data('initialized')) {
+        var chipId = Materialize.guid();
+
+        if ($chips.attr('data-initialized')) {
           // Prevent double initialization.
           return;
         }
-        var options = $chips.data('options');
-        if (!options.data || !options.data instanceof Array) {
-          options.data = [];
+        if (!curr_options.data || !(curr_options.data instanceof Array)) {
+          curr_options.data = [];
         }
-        $chips.data('chips', options.data);
-        $chips.data('index', i);
-        $chips.data('initialized', true);
+        $chips.data('chips', curr_options.data);
+        $chips.attr('data-index', i);
+        $chips.attr('data-initialized', true);
 
         if (!$chips.hasClass(self.SELS.CHIPS)) {
           $chips.addClass('chips');
         }
 
-        self.chips($chips);
+        self.chips($chips, chipId);
         i++;
       });
     };
@@ -3840,10 +3886,9 @@ $(document).ready(function(){
 
         if (e.which === 8 || e.which === 46) {
           e.preventDefault();
-          var chipsIndex = $chips.data('index');
 
           index = $chip.index();
-          self.deleteChip(chipsIndex, index, $chips);
+          self.deleteChip(index, $chips);
 
           var selectIndex = null;
           if ((index + 1) < length) {
@@ -3855,7 +3900,7 @@ $(document).ready(function(){
           if (selectIndex < 0) selectIndex = null;
 
           if (null !== selectIndex) {
-            self.selectChip(chipsIndex, selectIndex, $chips);
+            self.selectChip(selectIndex, $chips);
           }
           if (!length) $chips.find('input').focus();
 
@@ -3866,7 +3911,7 @@ $(document).ready(function(){
             return;
           }
           $(SELS.CHIP).removeClass('selected');
-          self.selectChip($chips.data('index'), index, $chips);
+          self.selectChip(index, $chips);
 
         // right
         } else if (e.which === 39) {
@@ -3876,36 +3921,44 @@ $(document).ready(function(){
             $chips.find('input').focus();
             return;
           }
-          self.selectChip($chips.data('index'), index, $chips);
+          self.selectChip(index, $chips);
         }
       });
 
       self.$document.on('focusin', SELS.CHIPS + ' ' + SELS.INPUT, function(e){
-        $(e.target).closest(SELS.CHIPS).addClass('focus');
+        var $currChips = $(e.target).closest(SELS.CHIPS);
+        $currChips.addClass('focus');
+        $currChips.siblings('label, .prefix').addClass('active');
         $(SELS.CHIP).removeClass('selected');
       });
 
       self.$document.on('focusout', SELS.CHIPS + ' ' + SELS.INPUT, function(e){
-        $(e.target).closest(SELS.CHIPS).removeClass('focus');
+        var $currChips = $(e.target).closest(SELS.CHIPS);
+        $currChips.removeClass('focus');
+
+        // Remove active if empty
+        if (!$currChips.data('chips').length) {
+          $currChips.siblings('label').removeClass('active');
+        }
+        $currChips.siblings('.prefix').removeClass('active');
       });
 
       self.$document.on('keydown', SELS.CHIPS + ' ' + SELS.INPUT, function(e){
         var $target = $(e.target);
         var $chips = $target.closest(SELS.CHIPS);
-        var chipsIndex = $chips.data('index');
         var chipsLength = $chips.children(SELS.CHIP).length;
 
         // enter
         if (13 === e.which) {
           e.preventDefault();
-          self.addChip(chipsIndex, {tag: $target.val()}, $chips);
+          self.addChip({tag: $target.val()}, $chips);
           $target.val('');
           return;
         }
 
         // delete or left
          if ((8 === e.keyCode || 37 === e.keyCode) && '' === $target.val() && chipsLength) {
-          self.selectChip(chipsIndex, chipsLength - 1, $chips);
+          self.selectChip(chipsLength - 1, $chips);
           $target.blur();
           return;
         }
@@ -3916,24 +3969,29 @@ $(document).ready(function(){
         var $chips = $target.closest(SELS.CHIPS);
         var $chip = $target.closest(SELS.CHIP);
         e.stopPropagation();
-        self.deleteChip(
-          $chips.data('index'),
-          $chip.index(),
-          $chips
-        );
+        self.deleteChip($chip.index(), $chips);
         $chips.find('input').focus();
       });
     };
 
-    this.chips = function($chips) {
+    this.chips = function($chips, chipId) {
       var html = '';
-      var options = $chips.data('options');
       $chips.data('chips').forEach(function(elem){
         html += self.renderChip(elem);
       });
-      html += '<input class="input" placeholder="">';
+      html += '<input id="' + chipId +'" class="input" placeholder="">';
       $chips.html(html);
       self.setPlaceholder($chips);
+
+      // Set for attribute for label
+      var label = $chips.next('label');
+      if (label.length) {
+        label.attr('for', chipId);
+
+        if ($chips.data('chips').length) {
+          label.addClass('active');
+        }
+      }
     };
 
     this.renderChip = function(elem) {
@@ -3949,11 +4007,11 @@ $(document).ready(function(){
     };
 
     this.setPlaceholder = function($chips) {
-      var options = $chips.data('options');
-      if ($chips.data('chips').length && options.placeholder) {
-        $chips.find('input').prop('placeholder', options.placeholder);
-      } else if (!$chips.data('chips').length && options.secondaryPlaceholder) {
-        $chips.find('input').prop('placeholder', options.secondaryPlaceholder);
+      if ($chips.data('chips').length && curr_options.placeholder) {
+        $chips.find('input').prop('placeholder', curr_options.placeholder);
+
+      } else if (!$chips.data('chips').length && curr_options.secondaryPlaceholder) {
+        $chips.find('input').prop('placeholder', curr_options.secondaryPlaceholder);
       }
     };
 
@@ -3969,27 +4027,42 @@ $(document).ready(function(){
       return '' !== elem.tag && !exists;
     };
 
-    this.addChip = function(chipsIndex, elem, $chips) {
+    this.addChip = function(elem, $chips) {
       if (!self.isValid($chips, elem)) {
         return;
       }
-      var options = $chips.data('options');
       var chipHtml = self.renderChip(elem);
-      $chips.data('chips').push(elem);
+      var newData = [];
+      var oldData = $chips.data('chips');
+      for (var i = 0; i < oldData.length; i++) {
+        newData.push(oldData[i]);
+      }
+      newData.push(elem);
+
+      $chips.data('chips', newData);
       $(chipHtml).insertBefore($chips.find('input'));
       $chips.trigger('chip.add', elem);
       self.setPlaceholder($chips);
     };
 
-    this.deleteChip = function(chipsIndex, chipIndex, $chips) {
+    this.deleteChip = function(chipIndex, $chips) {
       var chip = $chips.data('chips')[chipIndex];
       $chips.find('.chip').eq(chipIndex).remove();
-      $chips.data('chips').splice(chipIndex, 1);
+
+      var newData = [];
+      var oldData = $chips.data('chips');
+      for (var i = 0; i < oldData.length; i++) {
+        if (i !== chipIndex) {
+          newData.push(oldData[i]);
+        }
+      }
+
+      $chips.data('chips', newData);
       $chips.trigger('chip.delete', chip);
       self.setPlaceholder($chips);
     };
 
-    this.selectChip = function(chipsIndex, chipIndex, $chips) {
+    this.selectChip = function(chipIndex, $chips) {
       var $chip = $chips.find('.chip').eq(chipIndex);
       if ($chip && false === $chip.hasClass('selected')) {
         $chip.addClass('selected');
