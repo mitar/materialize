@@ -275,6 +275,49 @@ m.isFunction(t)&&t(null,!0)}),f.queue(a,m.isString(v)?v:"",[])),"stop"===y?(i(a)
 })(window);
 
 
+/*
+ * raf.js
+ * https://github.com/ngryman/raf.js
+ *
+ * original requestAnimationFrame polyfill by Erik Möller
+ * inspired from paul_irish gist and post
+ *
+ * Copyright (c) 2013 ngryman
+ * Licensed under the MIT license.
+ */
+(function(window) {
+  var lastTime = 0,
+    vendors = ['webkit', 'moz'],
+    requestAnimationFrame = window.requestAnimationFrame,
+    cancelAnimationFrame = window.cancelAnimationFrame,
+    i = vendors.length;
+
+  // try to un-prefix existing raf
+  while (--i >= 0 && !requestAnimationFrame) {
+    requestAnimationFrame = window[vendors[i] + 'RequestAnimationFrame'];
+    cancelAnimationFrame = window[vendors[i] + 'CancelRequestAnimationFrame'];
+  }
+
+  // polyfill with setTimeout fallback
+  // heavily inspired from @darius gist mod: https://gist.github.com/paulirish/1579671#comment-837945
+  if (!requestAnimationFrame || !cancelAnimationFrame) {
+    requestAnimationFrame = function(callback) {
+      var now = +Date.now(),
+        nextTime = Math.max(lastTime + 16, now);
+      return setTimeout(function() {
+        callback(lastTime = nextTime);
+      }, nextTime - now);
+    };
+
+    cancelAnimationFrame = clearTimeout;
+  }
+
+  // export to window
+  window.requestAnimationFrame = requestAnimationFrame;
+  window.cancelAnimationFrame = cancelAnimationFrame;
+}(window));
+
+
 // Unique ID
 Materialize.guid = (function() {
   function s4() {
@@ -287,6 +330,15 @@ Materialize.guid = (function() {
            s4() + '-' + s4() + s4() + s4();
   };
 })();
+
+/**
+ * Escapes hash from special characters
+ * @param {string} hash  String returned from this.hash
+ * @returns {string}
+ */
+Materialize.escapeHash = function(hash) {
+  return hash.replace( /(:|\.|\[|\]|,|=)/g, "\\$1" );
+};
 
 Materialize.elementOrParentIsFixed = function(element) {
     var $element = $(element);
@@ -302,11 +354,12 @@ Materialize.elementOrParentIsFixed = function(element) {
 };
 
 // Velocity has conflicts when loaded with jQuery, this will check for it
+// First, check if in noConflict mode
 var Vel;
-if ($) {
-  Vel = $.Velocity;
-} else if (jQuery) {
+if (jQuery) {
   Vel = jQuery.Velocity;
+} else if ($) {
+  Vel = $.Velocity;
 } else {
   Vel = Velocity;
 }
@@ -740,21 +793,15 @@ if ($) {
   });
 }( jQuery ));
 ;(function($) {
-    var _stack = 0,
-    _lastID = 0,
-    _generateID = function() {
-      _lastID++;
-      return 'materialize-lean-overlay-' + _lastID;
-    };
+  var _stack = 0,
+  _lastID = 0,
+  _generateID = function() {
+    _lastID++;
+    return 'materialize-modal-overlay-' + _lastID;
+  };
 
-  $.fn.extend({
-    openModal: function(options) {
-
-      var $body = $('body');
-      var oldWidth = $body.innerWidth();
-      $body.css('overflow', 'hidden');
-      $body.width(oldWidth);
-
+  var methods = {
+    init : function(options) {
       var defaults = {
         opacity: 0.5,
         in_duration: 350,
@@ -765,171 +812,169 @@ if ($) {
         starting_top: '4%',
         ending_top: '10%'
       };
-      var $modal = $(this);
-
-      if ($modal.hasClass('open')) {
-        return;
-      }
-
-      var overlayID = _generateID();
-      var $overlay = $('<div class="lean-overlay"></div>');
-      lStack = (++_stack);
-
-      // Store a reference of the overlay
-      $overlay.attr('id', overlayID).css('z-index', 1000 + lStack * 2);
-      $modal.data('overlay-id', overlayID).css('z-index', 1000 + lStack * 2 + 1);
-      $modal.addClass('open');
-
-      $("body").append($overlay);
 
       // Override defaults
       options = $.extend(defaults, options);
 
-      if (options.dismissible) {
-        $overlay.click(function() {
-          $modal.closeModal(options);
-        });
-        // Return on ESC
-        $(document).on('keyup.leanModal' + overlayID, function(e) {
-          if (e.keyCode === 27) {   // ESC key
-            $modal.closeModal(options);
-          }
-        });
-      }
+      return this.each(function() {
+        var $modal = $(this);
+        var modal_id = $(this).attr("id") || '#' + $(this).data('target');
 
-      $modal.find(".modal-close").on('click.close', function(e) {
-        $modal.closeModal(options);
-      });
+        var closeModal = function() {
+          var overlayID = $modal.data('overlay-id');
+          var $overlay = $('#' + overlayID);
+          $modal.removeClass('open');
 
-      $overlay.css({ display : "block", opacity : 0 });
+          // Enable scrolling
+          $('body').css({
+            overflow: '',
+            width: ''
+          });
 
-      $modal.css({
-        display : "block",
-        opacity: 0
-      });
+          $modal.find('.modal-close').off('click.close');
+          $(document).off('keyup.modal' + overlayID);
 
-      $overlay.velocity({opacity: options.opacity}, {duration: options.in_duration, queue: false, ease: "easeOutCubic"});
-      $modal.data('associated-overlay', $overlay[0]);
-
-      // Define Bottom Sheet animation
-      if ($modal.hasClass('bottom-sheet')) {
-        $modal.velocity({bottom: "0", opacity: 1}, {
-          duration: options.in_duration,
-          queue: false,
-          ease: "easeOutCubic",
-          // Handle modal ready callback
-          complete: function() {
-            if (typeof(options.ready) === "function") {
-              options.ready();
-            }
-          }
-        });
-      }
-      else {
-        $.Velocity.hook($modal, "scaleX", 0.7);
-        $modal.css({ top: options.starting_top });
-        $modal.velocity({top: options.ending_top, opacity: 1, scaleX: '1'}, {
-          duration: options.in_duration,
-          queue: false,
-          ease: "easeOutCubic",
-          // Handle modal ready callback
-          complete: function() {
-            if (typeof(options.ready) === "function") {
-              options.ready();
-            }
-          }
-        });
-      }
+          $overlay.velocity( { opacity: 0}, {duration: options.out_duration, queue: false, ease: "easeOutQuart"});
 
 
-    }
-  });
+          // Define Bottom Sheet animation
+          var exitVelocityOptions = {
+            duration: options.out_duration,
+            queue: false,
+            ease: "easeOutCubic",
+            // Handle modal ready callback
+            complete: function() {
+              $(this).css({display:"none"});
 
-  $.fn.extend({
-    closeModal: function(options) {
-      var defaults = {
-        out_duration: 250,
-        complete: undefined
-      };
-      var $modal = $(this);
-      var overlayID = $modal.data('overlay-id');
-      var $overlay = $('#' + overlayID);
-      $modal.removeClass('open');
-
-      options = $.extend(defaults, options);
-
-      // Enable scrolling
-      $('body').css({
-        overflow: '',
-        width: ''
-      });
-
-      $modal.find('.modal-close').off('click.close');
-      $(document).off('keyup.leanModal' + overlayID);
-
-      $overlay.velocity( { opacity: 0}, {duration: options.out_duration, queue: false, ease: "easeOutQuart"});
-
-
-      // Define Bottom Sheet animation
-      if ($modal.hasClass('bottom-sheet')) {
-        $modal.velocity({bottom: "-100%", opacity: 0}, {
-          duration: options.out_duration,
-          queue: false,
-          ease: "easeOutCubic",
-          // Handle modal ready callback
-          complete: function() {
-            $overlay.css({display:"none"});
-
-            // Call complete callback
-            if (typeof(options.complete) === "function") {
-              options.complete();
-            }
-            $overlay.remove();
-            _stack--;
-          }
-        });
-      }
-      else {
-        $modal.velocity(
-          { top: options.starting_top, opacity: 0, scaleX: 0.7}, {
-          duration: options.out_duration,
-          complete:
-            function() {
-
-              $(this).css('display', 'none');
               // Call complete callback
               if (typeof(options.complete) === "function") {
-                options.complete();
+                options.complete.call(this, $modal);
               }
               $overlay.remove();
               _stack--;
             }
+          };
+          if ($modal.hasClass('bottom-sheet')) {
+            $modal.velocity({bottom: "-100%", opacity: 0}, exitVelocityOptions);
           }
-        );
-      }
-    }
-  });
+          else {
+            $modal.velocity(
+              { top: options.starting_top, opacity: 0, scaleX: 0.7},
+              exitVelocityOptions
+            );
+          }
+        };
 
-  $.fn.extend({
-    leanModal: function(option) {
-      return this.each(function() {
+        var openModal = function($trigger) {
+          var $body = $('body');
+          var oldWidth = $body.innerWidth();
+          $body.css('overflow', 'hidden');
+          $body.width(oldWidth);
 
-        var defaults = {
-          starting_top: '4%'
-        },
-        // Override defaults
-        options = $.extend(defaults, option);
+          if ($modal.hasClass('open')) {
+            return;
+          }
+
+          var overlayID = _generateID();
+          var $overlay = $('<div class="modal-overlay"></div>');
+          lStack = (++_stack);
+
+          // Store a reference of the overlay
+          $overlay.attr('id', overlayID).css('z-index', 1000 + lStack * 2);
+          $modal.data('overlay-id', overlayID).css('z-index', 1000 + lStack * 2 + 1);
+          $modal.addClass('open');
+
+          $("body").append($overlay);
+
+          if (options.dismissible) {
+            $overlay.click(function() {
+              closeModal();
+            });
+            // Return on ESC
+            $(document).on('keyup.modal' + overlayID, function(e) {
+              if (e.keyCode === 27) {   // ESC key
+                closeModal();
+              }
+            });
+          }
+
+          $modal.find(".modal-close").on('click.close', function(e) {
+            closeModal();
+          });
+
+          $overlay.css({ display : "block", opacity : 0 });
+
+          $modal.css({
+            display : "block",
+            opacity: 0
+          });
+
+          $overlay.velocity({opacity: options.opacity}, {duration: options.in_duration, queue: false, ease: "easeOutCubic"});
+          $modal.data('associated-overlay', $overlay[0]);
+
+          // Define Bottom Sheet animation
+          var enterVelocityOptions = {
+            duration: options.in_duration,
+            queue: false,
+            ease: "easeOutCubic",
+            // Handle modal ready callback
+            complete: function() {
+              if (typeof(options.ready) === "function") {
+                options.ready.call(this, $modal, $trigger);
+              }
+            }
+          };
+          if ($modal.hasClass('bottom-sheet')) {
+            $modal.velocity({bottom: "0", opacity: 1}, enterVelocityOptions);
+          }
+          else {
+            $.Velocity.hook($modal, "scaleX", 0.7);
+            $modal.css({ top: options.starting_top });
+            $modal.velocity({top: options.ending_top, opacity: 1, scaleX: '1'}, enterVelocityOptions);
+          }
+
+        };
+
+        // Reset handlers
+        $(document).off('click.modalTrigger', 'a[href="#' + modal_id + '"], [data-target="' + modal_id + '"]');
+        $(this).off('openModal');
+        $(this).off('closeModal');
 
         // Close Handlers
-        $(this).click(function(e) {
+        $(document).on('click.modalTrigger', 'a[href="#' + modal_id + '"], [data-target="' + modal_id + '"]', function(e) {
           options.starting_top = ($(this).offset().top - $(window).scrollTop()) /1.15;
-          var modal_id = $(this).attr("href") || '#' + $(this).data('target');
-          $(modal_id).openModal(options);
+          openModal($(this));
           e.preventDefault();
         }); // done set on click
+
+        $(this).on('openModal', function() {
+          var modal_id = $(this).attr("href") || '#' + $(this).data('target');
+          openModal();
+        });
+
+        $(this).on('closeModal', function() {
+          closeModal();
+        });
       }); // done return
+    },
+    open : function() {
+      $(this).trigger('openModal');
+    },
+    close : function() {
+      $(this).trigger('closeModal');
     }
-  });
+  };
+
+  $.fn.modal = function(methodOrOptions) {
+    if ( methods[methodOrOptions] ) {
+      return methods[ methodOrOptions ].apply( this, Array.prototype.slice.call( arguments, 1 ));
+    } else if ( typeof methodOrOptions === 'object' || ! methodOrOptions ) {
+      // Default to "init"
+      return methods.init.apply( this, arguments );
+    } else {
+      $.error( 'Method ' +  methodOrOptions + ' does not exist on jQuery.modal' );
+    }
+  };
 })(jQuery);
 ;(function ($) {
 
@@ -1008,7 +1053,11 @@ if ($) {
         }
 
         // Set css on origin
-        origin.css({position: 'absolute', 'z-index': 1000})
+        origin.css({
+          position: 'absolute',
+          'z-index': 1000,
+          'will-change': 'left, top, width, height'
+        })
         .data('width', originalWidth)
         .data('height', originalHeight);
 
@@ -1176,7 +1225,8 @@ if ($) {
                 width: '',
                 'max-width': '',
                 position: '',
-                'z-index': ''
+                'z-index': '',
+                'will-change': ''
               });
 
               // Remove class
@@ -1241,7 +1291,7 @@ $(document).ready(function(){
         $this.children("img").one("load", function() {
           updateParallax(true);
         }).each(function() {
-          if(this.complete) $(this).load();
+          if (this.complete) $(this).trigger("load");
         });
 
         $(window).scroll(function() {
@@ -1257,7 +1307,8 @@ $(document).ready(function(){
       });
 
     };
-}( jQuery ));;(function ($) {
+}( jQuery ));
+;(function ($) {
 
   var methods = {
     init : function(options) {
@@ -1336,7 +1387,7 @@ $(document).ready(function(){
 
       // Hide the remaining content
       $links.not($active).each(function () {
-        $(this.hash).hide();
+        $(Materialize.escapeHash(this.hash)).hide();
       });
 
 
@@ -1363,7 +1414,7 @@ $(document).ready(function(){
 
         // Update the variables with the new link and content
         $active = $(this);
-        $content = $(this.hash);
+        $content = $(Materialize.escapeHash(this.hash));
         $links = $this.find('li.tab a');
         var activeRect = $active.position();
 
@@ -1413,7 +1464,7 @@ $(document).ready(function(){
       // Default to "init"
       return methods.init.apply( this, arguments );
     } else {
-      $.error( 'Method ' +  methodOrOptions + ' does not exist on jQuery.tooltip' );
+      $.error( 'Method ' +  methodOrOptions + ' does not exist on jQuery.tabs' );
     }
   };
 
@@ -1448,6 +1499,12 @@ $(document).ready(function(){
       return this.each(function() {
         var tooltipId = Materialize.guid();
         var origin = $(this);
+
+        // Destroy old tooltip
+        if (origin.attr('data-tooltip-id')) {
+          $('#' + origin.attr('data-tooltip-id')).remove();
+        }
+
         origin.attr('data-tooltip-id', tooltipId);
 
         // Get attributes.
@@ -2020,33 +2077,34 @@ $(document).ready(function(){
 
     // Allows timer to be pause while being panned
     var timeLeft = displayLength;
-    var counterInterval = setInterval (function(){
+    var counterInterval;
+    if (timeLeft != null)  {
+      counterInterval = setInterval (function(){
+        if (newToast.parentNode === null)
+          window.clearInterval(counterInterval);
 
+        // If toast is not being dragged, decrease its time remaining
+        if (!newToast.classList.contains('panning')) {
+          timeLeft -= 20;
+        }
 
-      if (newToast.parentNode === null)
-        window.clearInterval(counterInterval);
-
-      // If toast is not being dragged, decrease its time remaining
-      if (!newToast.classList.contains('panning')) {
-        timeLeft -= 20;
-      }
-
-      if (timeLeft <= 0) {
-        // Animate toast out
-        Vel(newToast, {"opacity": 0, marginTop: '-40px'}, { duration: 375,
-            easing: 'easeOutExpo',
-            queue: false,
-            complete: function(){
-              // Call the optional callback
-              if(typeof(completeCallback) === "function")
-                completeCallback();
-              // Remove toast after it times out
-              this[0].parentNode.removeChild(this[0]);
-            }
-          });
-        window.clearInterval(counterInterval);
-      }
-    }, 20);
+        if (timeLeft <= 0) {
+          // Animate toast out
+          Vel(newToast, {"opacity": 0, marginTop: '-40px'}, { duration: 375,
+              easing: 'easeOutExpo',
+              queue: false,
+              complete: function(){
+                // Call the optional callback
+                if(typeof(completeCallback) === "function")
+                  completeCallback();
+                // Remove toast after it times out
+                this[0].parentNode.removeChild(this[0]);
+              }
+            });
+          window.clearInterval(counterInterval);
+        }
+      }, 20);
+    }
 
 
 
@@ -2073,7 +2131,7 @@ $(document).ready(function(){
         }
         else {
           // Insert as text;
-          toast.innerHTML = html; 
+          toast.innerHTML = html;
         }
         // Bind hammer
         var hammerHandler = new Hammer(toast, {prevent_default: false});
@@ -2132,7 +2190,8 @@ $(document).ready(function(){
       var defaults = {
         menuWidth: 300,
         edge: 'left',
-        closeOnClick: false
+        closeOnClick: false,
+        draggable: true
       };
       options = $.extend(defaults, options);
 
@@ -2146,8 +2205,13 @@ $(document).ready(function(){
         }
 
         // Add Touch Area
-        var $dragTarget = $('<div class="drag-target"></div>').attr('data-sidenav', $this.attr('data-activates'));
-        $('body').append($dragTarget);
+        var $dragTarget;
+        if (options.draggable) {
+          $dragTarget = $('<div class="drag-target"></div>').attr('data-sidenav', $this.attr('data-activates'));
+          $('body').append($dragTarget);
+        } else {
+          $dragTarget = $();
+        }
 
         if (options.edge == 'left') {
           menu_id.css('transform', 'translateX(-100%)');
@@ -2256,22 +2320,165 @@ $(document).ready(function(){
         var panning = false;
         var menuOut = false;
 
-        $dragTarget.on('click', function(){
-          if (menuOut) {
+        if (options.draggable) {
+          $dragTarget.on('click', function(){
+            if (menuOut) {
+              removeMenu();
+            }
+          });
+
+          $dragTarget.hammer({
+            prevent_default: false
+          }).bind('pan', function(e) {
+
+            if (e.gesture.pointerType == "touch") {
+
+              var direction = e.gesture.direction;
+              var x = e.gesture.center.x;
+              var y = e.gesture.center.y;
+              var velocityX = e.gesture.velocityX;
+
+              // Disable Scrolling
+              var $body = $('body');
+              var $overlay = $('#sidenav-overlay');
+              var oldWidth = $body.innerWidth();
+              $body.css('overflow', 'hidden');
+              $body.width(oldWidth);
+
+              // If overlay does not exist, create one and if it is clicked, close menu
+              if ($overlay.length === 0) {
+                $overlay = $('<div id="sidenav-overlay"></div>');
+                $overlay.css('opacity', 0).click( function(){
+                  removeMenu();
+                });
+                $('body').append($overlay);
+              }
+
+              // Keep within boundaries
+              if (options.edge === 'left') {
+                if (x > options.menuWidth) { x = options.menuWidth; }
+                else if (x < 0) { x = 0; }
+              }
+
+              if (options.edge === 'left') {
+                // Left Direction
+                if (x < (options.menuWidth / 2)) { menuOut = false; }
+                // Right Direction
+                else if (x >= (options.menuWidth / 2)) { menuOut = true; }
+                menu_id.css('transform', 'translateX(' + (x - options.menuWidth) + 'px)');
+              }
+              else {
+                // Left Direction
+                if (x < (window.innerWidth - options.menuWidth / 2)) {
+                  menuOut = true;
+                }
+                // Right Direction
+                else if (x >= (window.innerWidth - options.menuWidth / 2)) {
+                 menuOut = false;
+               }
+                var rightPos = (x - options.menuWidth / 2);
+                if (rightPos < 0) {
+                  rightPos = 0;
+                }
+
+                menu_id.css('transform', 'translateX(' + rightPos + 'px)');
+              }
+
+
+              // Percentage overlay
+              var overlayPerc;
+              if (options.edge === 'left') {
+                overlayPerc = x / options.menuWidth;
+                $overlay.velocity({opacity: overlayPerc }, {duration: 10, queue: false, easing: 'easeOutQuad'});
+              }
+              else {
+                overlayPerc = Math.abs((x - window.innerWidth) / options.menuWidth);
+                $overlay.velocity({opacity: overlayPerc }, {duration: 10, queue: false, easing: 'easeOutQuad'});
+              }
+            }
+
+          }).bind('panend', function(e) {
+
+            if (e.gesture.pointerType == "touch") {
+              var $overlay = $('<div id="sidenav-overlay"></div>');
+              var velocityX = e.gesture.velocityX;
+              var x = e.gesture.center.x;
+              var leftPos = x - options.menuWidth;
+              var rightPos = x - options.menuWidth / 2;
+              if (leftPos > 0 ) {
+                leftPos = 0;
+              }
+              if (rightPos < 0) {
+                rightPos = 0;
+              }
+              panning = false;
+
+              if (options.edge === 'left') {
+                // If velocityX <= 0.3 then the user is flinging the menu closed so ignore menuOut
+                if ((menuOut && velocityX <= 0.3) || velocityX < -0.5) {
+                  // Return menu to open
+                  if (leftPos !== 0) {
+                    menu_id.velocity({'translateX': [0, leftPos]}, {duration: 300, queue: false, easing: 'easeOutQuad'});
+                  }
+
+                  $overlay.velocity({opacity: 1 }, {duration: 50, queue: false, easing: 'easeOutQuad'});
+                  $dragTarget.css({width: '50%', right: 0, left: ''});
+                  menuOut = true;
+                }
+                else if (!menuOut || velocityX > 0.3) {
+                  // Enable Scrolling
+                  $('body').css({
+                    overflow: '',
+                    width: ''
+                  });
+                  // Slide menu closed
+                  menu_id.velocity({'translateX': [-1 * options.menuWidth - 10, leftPos]}, {duration: 200, queue: false, easing: 'easeOutQuad'});
+                  $overlay.velocity({opacity: 0 }, {duration: 200, queue: false, easing: 'easeOutQuad',
+                    complete: function () {
+                      $(this).remove();
+                    }});
+                  $dragTarget.css({width: '10px', right: '', left: 0});
+                }
+              }
+              else {
+                if ((menuOut && velocityX >= -0.3) || velocityX > 0.5) {
+                  // Return menu to open
+                  if (rightPos !== 0) {
+                    menu_id.velocity({'translateX': [0, rightPos]}, {duration: 300, queue: false, easing: 'easeOutQuad'});
+                  }
+
+                  $overlay.velocity({opacity: 1 }, {duration: 50, queue: false, easing: 'easeOutQuad'});
+                  $dragTarget.css({width: '50%', right: '', left: 0});
+                  menuOut = true;
+                }
+                else if (!menuOut || velocityX < -0.3) {
+                  // Enable Scrolling
+                  $('body').css({
+                    overflow: '',
+                    width: ''
+                  });
+
+                  // Slide menu closed
+                  menu_id.velocity({'translateX': [options.menuWidth + 10, rightPos]}, {duration: 200, queue: false, easing: 'easeOutQuad'});
+                  $overlay.velocity({opacity: 0 }, {duration: 200, queue: false, easing: 'easeOutQuad',
+                    complete: function () {
+                      $(this).remove();
+                    }});
+                  $dragTarget.css({width: '10px', right: 0, left: ''});
+                }
+              }
+
+            }
+          });
+        }
+
+        $this.click(function() {
+          if (menuOut === true) {
+            menuOut = false;
+            panning = false;
             removeMenu();
           }
-        });
-
-        $dragTarget.hammer({
-          prevent_default: false
-        }).bind('pan', function(e) {
-
-          if (e.gesture.pointerType == "touch") {
-
-            var direction = e.gesture.direction;
-            var x = e.gesture.center.x;
-            var y = e.gesture.center.y;
-            var velocityX = e.gesture.velocityX;
+          else {
 
             // Disable Scrolling
             var $body = $('body');
@@ -2280,180 +2487,40 @@ $(document).ready(function(){
             $body.css('overflow', 'hidden');
             $body.width(oldWidth);
 
-            // If overlay does not exist, create one and if it is clicked, close menu
-            if ($overlay.length === 0) {
-              $overlay.css('opacity', 0).click( function(){
-                removeMenu();
-              });
-              $('body').append($overlay);
-            }
-
-            // Keep within boundaries
-            if (options.edge === 'left') {
-              if (x > options.menuWidth) { x = options.menuWidth; }
-              else if (x < 0) { x = 0; }
-            }
+            // Push current drag target on top of DOM tree
+            $('body').append($dragTarget);
 
             if (options.edge === 'left') {
-              // Left Direction
-              if (x < (options.menuWidth / 2)) { menuOut = false; }
-              // Right Direction
-              else if (x >= (options.menuWidth / 2)) { menuOut = true; }
-              menu_id.css('transform', 'translateX(' + (x - options.menuWidth) + 'px)');
+              $dragTarget.css({width: '50%', right: 0, left: ''});
+              menu_id.velocity({'translateX': [0, -1 * options.menuWidth]}, {duration: 300, queue: false, easing: 'easeOutQuad'});
             }
             else {
-              // Left Direction
-              if (x < (window.innerWidth - options.menuWidth / 2)) {
-                menuOut = true;
-              }
-              // Right Direction
-              else if (x >= (window.innerWidth - options.menuWidth / 2)) {
-               menuOut = false;
-             }
-              var rightPos = (x - options.menuWidth / 2);
-              if (rightPos < 0) {
-                rightPos = 0;
-              }
-
-              menu_id.css('transform', 'translateX(' + rightPos + 'px)');
+              $dragTarget.css({width: '50%', right: '', left: 0});
+              menu_id.velocity({'translateX': [0, options.menuWidth]}, {duration: 300, queue: false, easing: 'easeOutQuad'});
             }
 
-
-            // Percentage overlay
-            var overlayPerc;
-            if (options.edge === 'left') {
-              overlayPerc = x / options.menuWidth;
-              $overlay.velocity({opacity: overlayPerc }, {duration: 10, queue: false, easing: 'easeOutQuad'});
-            }
-            else {
-              overlayPerc = Math.abs((x - window.innerWidth) / options.menuWidth);
-              $overlay.velocity({opacity: overlayPerc }, {duration: 10, queue: false, easing: 'easeOutQuad'});
-            }
-          }
-
-        }).bind('panend', function(e) {
-
-          if (e.gesture.pointerType == "touch") {
-            var $overlay = $('<div id="sidenav-overlay"></div>');
-            var velocityX = e.gesture.velocityX;
-            var x = e.gesture.center.x;
-            var leftPos = x - options.menuWidth;
-            var rightPos = x - options.menuWidth / 2;
-            if (leftPos > 0 ) {
-              leftPos = 0;
-            }
-            if (rightPos < 0) {
-              rightPos = 0;
-            }
-            panning = false;
-
-            if (options.edge === 'left') {
-              // If velocityX <= 0.3 then the user is flinging the menu closed so ignore menuOut
-              if ((menuOut && velocityX <= 0.3) || velocityX < -0.5) {
-                // Return menu to open
-                if (leftPos !== 0) {
-                  menu_id.velocity({'translateX': [0, leftPos]}, {duration: 300, queue: false, easing: 'easeOutQuad'});
-                }
-
-                $overlay.velocity({opacity: 1 }, {duration: 50, queue: false, easing: 'easeOutQuad'});
-                $dragTarget.css({width: '50%', right: 0, left: ''});
-                menuOut = true;
-              }
-              else if (!menuOut || velocityX > 0.3) {
-                // Enable Scrolling
-                $('body').css({
-                  overflow: '',
-                  width: ''
-                });
-                // Slide menu closed
-                menu_id.velocity({'translateX': [-1 * options.menuWidth - 10, leftPos]}, {duration: 200, queue: false, easing: 'easeOutQuad'});
-                $overlay.velocity({opacity: 0 }, {duration: 200, queue: false, easing: 'easeOutQuad',
-                  complete: function () {
-                    $(this).remove();
-                  }});
-                $dragTarget.css({width: '10px', right: '', left: 0});
-              }
-            }
-            else {
-              if ((menuOut && velocityX >= -0.3) || velocityX > 0.5) {
-                // Return menu to open
-                if (rightPos !== 0) {
-                  menu_id.velocity({'translateX': [0, rightPos]}, {duration: 300, queue: false, easing: 'easeOutQuad'});
-                }
-
-                $overlay.velocity({opacity: 1 }, {duration: 50, queue: false, easing: 'easeOutQuad'});
-                $dragTarget.css({width: '50%', right: '', left: 0});
-                menuOut = true;
-              }
-              else if (!menuOut || velocityX < -0.3) {
-                // Enable Scrolling
-                $('body').css({
-                  overflow: '',
-                  width: ''
-                });
-
-                // Slide menu closed
-                menu_id.velocity({'translateX': [options.menuWidth + 10, rightPos]}, {duration: 200, queue: false, easing: 'easeOutQuad'});
-                $overlay.velocity({opacity: 0 }, {duration: 200, queue: false, easing: 'easeOutQuad',
-                  complete: function () {
-                    $(this).remove();
-                  }});
-                $dragTarget.css({width: '10px', right: 0, left: ''});
-              }
-            }
-
-          }
-        });
-
-          $this.click(function() {
-            if (menuOut === true) {
+            $overlay.css('opacity', 0)
+            .click(function(){
               menuOut = false;
               panning = false;
               removeMenu();
-            }
-            else {
+              $overlay.velocity({opacity: 0}, {duration: 300, queue: false, easing: 'easeOutQuad',
+                complete: function() {
+                  $(this).remove();
+                } });
 
-              // Disable Scrolling
-              var $body = $('body');
-              var $overlay = $('<div id="sidenav-overlay"></div>');
-              var oldWidth = $body.innerWidth();
-              $body.css('overflow', 'hidden');
-              $body.width(oldWidth);
-
-              // Push current drag target on top of DOM tree
-              $('body').append($dragTarget);
-
-              if (options.edge === 'left') {
-                $dragTarget.css({width: '50%', right: 0, left: ''});
-                menu_id.velocity({'translateX': [0, -1 * options.menuWidth]}, {duration: 300, queue: false, easing: 'easeOutQuad'});
-              }
-              else {
-                $dragTarget.css({width: '50%', right: '', left: 0});
-                menu_id.velocity({'translateX': [0, options.menuWidth]}, {duration: 300, queue: false, easing: 'easeOutQuad'});
-              }
-
-              $overlay.css('opacity', 0)
-              .click(function(){
-                menuOut = false;
+            });
+            $('body').append($overlay);
+            $overlay.velocity({opacity: 1}, {duration: 300, queue: false, easing: 'easeOutQuad',
+              complete: function () {
+                menuOut = true;
                 panning = false;
-                removeMenu();
-                $overlay.velocity({opacity: 0}, {duration: 300, queue: false, easing: 'easeOutQuad',
-                  complete: function() {
-                    $(this).remove();
-                  } });
+              }
+            });
+          }
 
-              });
-              $('body').append($overlay);
-              $overlay.velocity({opacity: 1}, {duration: 300, queue: false, easing: 'easeOutQuad',
-                complete: function () {
-                  menuOut = true;
-                  panning = false;
-                }
-              });
-            }
-
-            return false;
-          });
+          return false;
+        });
       });
 
 
@@ -2548,7 +2615,7 @@ $(document).ready(function(){
 	/**
 	 * Called when the user scrolls the window
 	 */
-	function onScroll() {
+	function onScroll(scrollOffset) {
 		// unique tick id
 		++ticks;
 
@@ -2559,8 +2626,7 @@ $(document).ready(function(){
 			bottom = top + jWindow.height();
 
 		// determine which elements are in view
-//        + 60 accounts for fixed nav
-		var intersections = findElements(top+offset.top + 200, right+offset.right, bottom+offset.bottom, left+offset.left);
+		var intersections = findElements(top+offset.top + scrollOffset || 200, right+offset.right, bottom+offset.bottom, left+offset.left);
 		$.each(intersections, function(i, element) {
 
 			var lastTick = element.data('scrollSpy:ticks');
@@ -2672,7 +2738,7 @@ $(document).ready(function(){
 			// Smooth scroll to section
 		  $('a[href="#' + $(element).attr('id') + '"]').click(function(e) {
 		    e.preventDefault();
-		    var offset = $(this.hash).offset().top + 1;
+		    var offset = $(Materialize.escapeHash(this.hash)).offset().top + 1;
 	    	$('html, body').animate({ scrollTop: offset - options.scrollOffset }, {duration: 400, queue: false, easing: 'easeOutCubic'});
 		  });
 		});
@@ -2682,7 +2748,9 @@ $(document).ready(function(){
 		offset.bottom = options.offsetBottom || 0;
 		offset.left = options.offsetLeft || 0;
 
-		var throttledScroll = throttle(onScroll, options.throttle || 100);
+		var throttledScroll = throttle(function() {
+			onScroll(options.scrollOffset);
+		}, options.throttle || 100);
 		var readyScroll = function(){
 			$(document).ready(throttledScroll);
 		};
@@ -3121,6 +3189,7 @@ $(document).ready(function(){
           // Set input value
           $autocomplete.on('click', 'li', function () {
             $input.val($(this).text().trim());
+            $input.trigger('change');
             $autocomplete.empty();
           });
         }
@@ -3184,9 +3253,9 @@ $(document).ready(function(){
 
           // Check for multiple type.
           if (type === 'multiple') {
-            options.append($('<li class="' + disabledClass + '"><img src="' + icon_url + '"' + classString + '><span><input type="checkbox"' + disabledClass + '/><label></label>' + option.html() + '</span></li>'));
+            options.append($('<li class="' + disabledClass + '"><img alt="" src="' + icon_url + '"' + classString + '><span><input type="checkbox"' + disabledClass + '/><label></label>' + option.html() + '</span></li>'));
           } else {
-            options.append($('<li class="' + disabledClass + optgroupClass + '"><img src="' + icon_url + '"' + classString + '><span>' + option.html() + '</span></li>'));
+            options.append($('<li class="' + disabledClass + optgroupClass + '"><img alt="" src="' + icon_url + '"' + classString + '><span>' + option.html() + '</span></li>'));
           }
           return true;
         }
@@ -3842,10 +3911,6 @@ $(document).ready(function(){
         var $chips = $(this);
         var chipId = Materialize.guid();
 
-        if ($chips.attr('data-initialized')) {
-          // Prevent double initialization.
-          return;
-        }
         if (!curr_options.data || !(curr_options.data instanceof Array)) {
           curr_options.data = [];
         }
@@ -3865,16 +3930,16 @@ $(document).ready(function(){
     this.handleEvents = function(){
       var SELS = self.SELS;
 
-      self.$document.on('click', SELS.CHIPS, function(e){
+      self.$document.off('click.chips-focus', SELS.CHIPS).on('click.chips-focus', SELS.CHIPS, function(e){
         $(e.target).find(SELS.INPUT).focus();
       });
 
-      self.$document.on('click', SELS.CHIP, function(e){
+      self.$document.off('click.chips-select', SELS.CHIP).on('click.chips-select', SELS.CHIP, function(e){
         $(SELS.CHIP).removeClass('selected');
         $(this).toggleClass('selected');
       });
 
-      self.$document.on('keydown', function(e){
+      self.$document.off('keydown.chips').on('keydown.chips', function(e){
         if ($(e.target).is('input, textarea')) {
           return;
         }
@@ -3930,14 +3995,14 @@ $(document).ready(function(){
         }
       });
 
-      self.$document.on('focusin', SELS.CHIPS + ' ' + SELS.INPUT, function(e){
+      self.$document.off('focusin.chips', SELS.CHIPS + ' ' + SELS.INPUT).on('focusin.chips', SELS.CHIPS + ' ' + SELS.INPUT, function(e){
         var $currChips = $(e.target).closest(SELS.CHIPS);
         $currChips.addClass('focus');
         $currChips.siblings('label, .prefix').addClass('active');
         $(SELS.CHIP).removeClass('selected');
       });
 
-      self.$document.on('focusout', SELS.CHIPS + ' ' + SELS.INPUT, function(e){
+      self.$document.off('focusout.chips', SELS.CHIPS + ' ' + SELS.INPUT).on('focusout.chips', SELS.CHIPS + ' ' + SELS.INPUT, function(e){
         var $currChips = $(e.target).closest(SELS.CHIPS);
         $currChips.removeClass('focus');
 
@@ -3948,7 +4013,7 @@ $(document).ready(function(){
         $currChips.siblings('.prefix').removeClass('active');
       });
 
-      self.$document.on('keydown', SELS.CHIPS + ' ' + SELS.INPUT, function(e){
+      self.$document.off('keydown.chips-add', SELS.CHIPS + ' ' + SELS.INPUT).on('keydown.chips-add', SELS.CHIPS + ' ' + SELS.INPUT, function(e){
         var $target = $(e.target);
         var $chips = $target.closest(SELS.CHIPS);
         var chipsLength = $chips.children(SELS.CHIP).length;
@@ -3969,7 +4034,8 @@ $(document).ready(function(){
         }
       });
 
-      self.$document.on('click', SELS.CHIPS + ' ' + SELS.DELETE, function(e) {
+      // Click on delete icon in chip.
+      self.$document.off('click.chips-delete', SELS.CHIPS + ' ' + SELS.DELETE).on('click.chips-delete', SELS.CHIPS + ' ' + SELS.DELETE, function(e) {
         var $target = $(e.target);
         var $chips = $target.closest(SELS.CHIPS);
         var $chip = $target.closest(SELS.CHIP);
@@ -4164,17 +4230,17 @@ $(document).ready(function(){
     $.fn.reverse = [].reverse;
 
     // Hover behaviour: make sure this doesn't work on .click-to-toggle FABs!
-    $(document).on('mouseenter.fixedActionBtn', '.fixed-action-btn:not(.click-to-toggle)', function(e) {
+    $(document).on('mouseenter.fixedActionBtn', '.fixed-action-btn:not(.click-to-toggle):not(.toolbar)', function(e) {
       var $this = $(this);
       openFABMenu($this);
     });
-    $(document).on('mouseleave.fixedActionBtn', '.fixed-action-btn:not(.click-to-toggle)', function(e) {
+    $(document).on('mouseleave.fixedActionBtn', '.fixed-action-btn:not(.click-to-toggle):not(.toolbar)', function(e) {
       var $this = $(this);
       closeFABMenu($this);
     });
 
     // Toggle-on-click behaviour.
-    $(document).on('click.fixedActionBtn', '.fixed-action-btn.click-to-toggle > a', function(e) {
+    $(document).on('click.fabClickToggle', '.fixed-action-btn.click-to-toggle > a', function(e) {
       var $this = $(this);
       var $menu = $this.parent();
       if ($menu.hasClass('active')) {
@@ -4182,6 +4248,13 @@ $(document).ready(function(){
       } else {
         openFABMenu($menu);
       }
+    });
+
+    // Toolbar transition behaviour.
+    $(document).on('click.fabToolbar', '.fixed-action-btn.toolbar > a', function(e) {
+      var $this = $(this);
+      var $menu = $this.parent();
+      FABtoToolbar($menu);
     });
 
   });
@@ -4192,12 +4265,18 @@ $(document).ready(function(){
     },
     closeFAB: function() {
       closeFABMenu($(this));
+    },
+    openToolbar: function() {
+      FABtoToolbar($(this));
+    },
+    closeToolbar: function() {
+      toolbarToFAB($(this));
     }
   });
 
 
   var openFABMenu = function (btn) {
-    $this = btn;
+    var $this = btn;
     if ($this.hasClass('active') === false) {
 
       // Get direction option
@@ -4226,7 +4305,7 @@ $(document).ready(function(){
   };
 
   var closeFABMenu = function (btn) {
-    $this = btn;
+    var $this = btn;
     // Get direction option
     var horizontal = $this.hasClass('horizontal');
     var offsetY, offsetX;
@@ -4244,6 +4323,169 @@ $(document).ready(function(){
       { opacity: "0", scaleX: ".4", scaleY: ".4", translateY: offsetY + 'px', translateX: offsetX + 'px'},
       { duration: 80 }
     );
+  };
+
+
+  /**
+   * Transform FAB into toolbar
+   * @param  {Object}  object jQuery object
+   */
+  var FABtoToolbar = function(btn) {
+    if (btn.attr('data-open') === "true") {
+      return;
+    }
+
+    var offsetX, offsetY, scaleFactor;
+    var windowWidth = window.innerWidth;
+    var windowHeight = window.innerHeight;
+    var btnRect = btn[0].getBoundingClientRect();
+    var anchor = btn.find('> a').first();
+    var menu = btn.find('> ul').first();
+    var backdrop = $('<div class="fab-backdrop"></div>');
+    var fabColor = anchor.css('background-color');
+    anchor.append(backdrop);
+
+    offsetX = btnRect.left - (windowWidth / 2) + (btnRect.width / 2);
+    offsetY = windowHeight - btnRect.bottom;
+    scaleFactor = windowWidth / backdrop.width();
+    btn.attr('data-origin-bottom', btnRect.bottom);
+    btn.attr('data-origin-left', btnRect.left);
+    btn.attr('data-origin-width', btnRect.width);
+
+    // Set initial state
+    btn.addClass('active');
+    btn.attr('data-open', true);
+    btn.css({
+      'text-align': 'center',
+      width: '100%',
+      bottom: 0,
+      left: 0,
+      transform: 'translateX(' + offsetX + 'px)',
+      transition: 'none'
+    });
+    anchor.css({
+      transform: 'translateY(' + -offsetY + 'px)',
+      transition: 'none'
+    });
+    backdrop.css({
+      'background-color': fabColor
+    });
+
+
+    setTimeout(function() {
+      btn.css({
+        transform: '',
+        transition: 'transform .2s cubic-bezier(0.550, 0.085, 0.680, 0.530), background-color 0s linear .2s'
+      });
+      anchor.css({
+        overflow: 'visible',
+        transform: '',
+        transition: 'transform .2s'
+      });
+
+      setTimeout(function() {
+        btn.css({
+          overflow: 'hidden',
+          'background-color': fabColor
+        });
+        backdrop.css({
+          transform: 'scale(' + scaleFactor + ')',
+          transition: 'transform .2s cubic-bezier(0.550, 0.055, 0.675, 0.190)'
+        });
+        menu.find('> li > a').css({
+          opacity: 1
+        });
+
+        // Scroll to close.
+        $(window).on('scroll.fabToolbarClose', function() {
+          toolbarToFAB(btn);
+          $(window).off('scroll.fabToolbarClose');
+          $(document).off('click.fabToolbarClose');
+        });
+
+        $(document).on('click.fabToolbarClose', function(e) {
+          if (!$(e.target).closest(menu).length) {
+            toolbarToFAB(btn);
+            $(window).off('scroll.fabToolbarClose');
+            $(document).off('click.fabToolbarClose');
+          }
+        });
+      }, 100);
+    }, 0);
+  };
+
+  /**
+   * Transform toolbar back into FAB
+   * @param  {Object}  object jQuery object
+   */
+  var toolbarToFAB = function(btn) {
+    if (btn.attr('data-open') !== "true") {
+      return;
+    }
+
+    var offsetX, offsetY, scaleFactor;
+    var windowWidth = window.innerWidth;
+    var windowHeight = window.innerHeight;
+    var btnWidth = btn.attr('data-origin-width');
+    var btnBottom = btn.attr('data-origin-bottom');
+    var btnLeft = btn.attr('data-origin-left');
+    var anchor = btn.find('> .btn-floating').first();
+    var menu = btn.find('> ul').first();
+    var backdrop = btn.find('.fab-backdrop');
+    var fabColor = anchor.css('background-color');
+
+    offsetX = btnLeft - (windowWidth / 2) + (btnWidth / 2);
+    offsetY = windowHeight - btnBottom;
+    scaleFactor = windowWidth / backdrop.width();
+
+
+    // Hide backdrop
+    btn.removeClass('active');
+    btn.attr('data-open', false);
+    btn.css({
+      'background-color': 'transparent',
+      transition: 'none'
+    });
+    anchor.css({
+      transition: 'none'
+    });
+    backdrop.css({
+      transform: 'scale(0)',
+      'background-color': fabColor
+    });
+    menu.find('> li > a').css({
+      opacity: ''
+    });
+
+    setTimeout(function() {
+      backdrop.remove();
+
+      // Set initial state.
+      btn.css({
+        'text-align': '',
+        width: '',
+        bottom: '',
+        left: '',
+        overflow: '',
+        'background-color': '',
+        transform: 'translate3d(' + -offsetX + 'px,0,0)'
+      });
+      anchor.css({
+        overflow: '',
+        transform: 'translate3d(0,' + offsetY + 'px,0)'
+      });
+
+      setTimeout(function() {
+        btn.css({
+          transform: 'translate3d(0,0,0)',
+          transition: 'transform .2s'
+        });
+        anchor.css({
+          transform: 'translate3d(0,0,0)',
+          transition: 'transform .2s cubic-bezier(0.550, 0.055, 0.675, 0.190)'
+        });
+      }, 20);
+    }, 200);
   };
 
 
@@ -7131,7 +7373,7 @@ Picker.extend( 'pickadate', DatePicker )
           options.dist = 0;
           var firstImage = view.find('.carousel-item img').first();
           if (firstImage.length) {
-            imageHeight = firstImage.load(function(){
+            imageHeight = firstImage.on('load', function(){
               view.css('height', $(this).height());
             });
           } else {
@@ -7164,7 +7406,9 @@ Picker.extend( 'pickadate', DatePicker )
             }
 
             // Handle clicks on indicators.
-            $indicator.click(function () {
+            $indicator.click(function (e) {
+              e.stopPropagation();
+
               var index = $(this).index();
               cycleTo(index);
             });
@@ -7489,7 +7733,7 @@ Picker.extend( 'pickadate', DatePicker )
           if (n === undefined) {
             n = 1;
           }
-          target = offset + dim * n;
+          target = (dim * Math.round(offset / dim)) + (dim * n);
           if (offset !== target) {
             amplitude = target - offset;
             timestamp = Date.now();
@@ -7501,7 +7745,7 @@ Picker.extend( 'pickadate', DatePicker )
           if (n === undefined) {
             n = 1;
           }
-          target = offset - dim * n;
+          target = (dim * Math.round(offset / dim)) - (dim * n);
           if (offset !== target) {
             amplitude = target - offset;
             timestamp = Date.now();

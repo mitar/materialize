@@ -77,7 +77,7 @@
 
       // Hide the remaining content
       $links.not($active).each(function () {
-        $(this.hash).hide();
+        $(Materialize.escapeHash(this.hash)).hide();
       });
 
 
@@ -104,7 +104,7 @@
 
         // Update the variables with the new link and content
         $active = $(this);
-        $content = $(this.hash);
+        $content = $(Materialize.escapeHash(this.hash));
         $links = $this.find('li.tab a');
         var activeRect = $active.position();
 
@@ -154,7 +154,7 @@
       // Default to "init"
       return methods.init.apply( this, arguments );
     } else {
-      $.error( 'Method ' +  methodOrOptions + ' does not exist on jQuery.tooltip' );
+      $.error( 'Method ' +  methodOrOptions + ' does not exist on jQuery.tabs' );
     }
   };
 
